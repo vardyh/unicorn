@@ -171,6 +171,7 @@ typedef struct TCGRelocation {
 
 typedef struct TCGLabel {
     int has_value;
+    int label_index;
     union {
         uintptr_t value;
         tcg_insn_unit *value_ptr;
@@ -758,6 +759,7 @@ struct TCGContext {
     void *cpu_hintp, *cpu_htba, *cpu_hver, *cpu_ssr, *cpu_ver;
     void *cpu_wim;
 
+    QSIMPLEQ_HEAD(, TCGLabelQemuLdst) ldst_labels;
     int exitreq_label;  // gen_tb_start()
 };
 

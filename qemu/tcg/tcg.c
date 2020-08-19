@@ -367,6 +367,10 @@ void tcg_context_init(TCGContext *s)
     }
 
     tcg_target_init(s);
+#if defined(PORT_FROM_QEMU_LATEST)
+    process_op_defs(s);
+#endif
+    return 0;
 }
 
 void tcg_prologue_init(TCGContext *s)
@@ -2575,6 +2579,10 @@ static inline int tcg_gen_code_common(TCGContext *s,
 
     s->code_buf = gen_code_buf;
     s->code_ptr = gen_code_buf;
+
+#ifdef TCG_TARGET_NEED_LDST_LABELS
+    QSIMPLEQ_INIT(&s->ldst_labels);
+#endif
 
     tcg_out_tb_init(s);
 
