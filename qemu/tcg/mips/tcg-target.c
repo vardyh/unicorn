@@ -141,11 +141,6 @@ static const TCGReg tcg_target_call_oarg_regs[2] = {
     TCG_REG_V1
 };
 
-static tcg_insn_unit *tb_ret_addr;
-static tcg_insn_unit *bswap32_addr;
-static tcg_insn_unit *bswap32u_addr;
-static tcg_insn_unit *bswap64_addr;
-
 static inline uint32_t reloc_pc16_val(tcg_insn_unit *pc, tcg_insn_unit *target)
 {
     /* Let the compiler perform the right-shift as part of the arithmetic.  */
@@ -652,7 +647,7 @@ static void tcg_out_bswap32(TCGContext *s, TCGReg ret, TCGReg arg)
         tcg_out_opc_reg(s, OPC_WSBH, ret, 0, arg);
         tcg_out_opc_sa(s, OPC_ROTR, ret, ret, 16);
     } else {
-        tcg_out_bswap_subr(s, bswap32_addr);
+        tcg_out_bswap_subr(s, s->bswap32_addr);
         /* delay slot -- never omit the insn, like tcg_out_mov might.  */
         tcg_out_opc_reg(s, OPC_OR, TCG_TMP0, arg, TCG_REG_ZERO);
         tcg_out_mov(s, TCG_TYPE_I32, ret, TCG_TMP3);
@@ -666,7 +661,7 @@ static void tcg_out_bswap32u(TCGContext *s, TCGReg ret, TCGReg arg)
         tcg_out_opc_reg(s, OPC_DSHD, ret, 0, ret);
         tcg_out_dsrl(s, ret, ret, 32);
     } else {
-        tcg_out_bswap_subr(s, bswap32u_addr);
+        tcg_out_bswap_subr(s, s->bswap32u_addr);
         /* delay slot -- never omit the insn, like tcg_out_mov might.  */
         tcg_out_opc_reg(s, OPC_OR, TCG_TMP0, arg, TCG_REG_ZERO);
         tcg_out_mov(s, TCG_TYPE_I32, ret, TCG_TMP3);
@@ -679,7 +674,7 @@ static void tcg_out_bswap64(TCGContext *s, TCGReg ret, TCGReg arg)
         tcg_out_opc_reg(s, OPC_DSBH, ret, 0, arg);
         tcg_out_opc_reg(s, OPC_DSHD, ret, 0, ret);
     } else {
-        tcg_out_bswap_subr(s, bswap64_addr);
+        tcg_out_bswap_subr(s, s->bswap64_addr);
         /* delay slot -- never omit the insn, like tcg_out_mov might.  */
         tcg_out_opc_reg(s, OPC_OR, TCG_TMP0, arg, TCG_REG_ZERO);
         tcg_out_mov(s, TCG_TYPE_I32, ret, TCG_TMP3);
@@ -1440,7 +1435,7 @@ static void tcg_out_qemu_ld_direct(TCGContext *s, TCGReg lo, TCGReg hi,
                 tcg_out_opc_imm(s, OPC_LWU, lo, base, 0);
                 tcg_out_bswap32u(s, lo, lo);
             } else {
-                tcg_out_bswap_subr(s, bswap32u_addr);
+                tcg_out_bswap_subr(s, s->bswap32u_addr);
                 /* delay slot */
                 tcg_out_opc_imm(s, OPC_LWU, TCG_TMP0, base, 0);
                 tcg_out_mov(s, TCG_TYPE_I64, lo, TCG_TMP3);
@@ -1453,7 +1448,7 @@ static void tcg_out_qemu_ld_direct(TCGContext *s, TCGReg lo, TCGReg hi,
             tcg_out_opc_imm(s, OPC_LW, lo, base, 0);
             tcg_out_bswap32(s, lo, lo);
         } else {
-            tcg_out_bswap_subr(s, bswap32_addr);
+            tcg_out_bswap_subr(s, s->bswap32_addr);
             /* delay slot */
             tcg_out_opc_imm(s, OPC_LW, TCG_TMP0, base, 0);
             tcg_out_mov(s, TCG_TYPE_I32, lo, TCG_TMP3);
@@ -1474,7 +1469,7 @@ static void tcg_out_qemu_ld_direct(TCGContext *s, TCGReg lo, TCGReg hi,
                 tcg_out_opc_imm(s, OPC_LD, lo, base, 0);
                 tcg_out_bswap64(s, lo, lo);
             } else {
-                tcg_out_bswap_subr(s, bswap64_addr);
+                tcg_out_bswap_subr(s, s->bswap64_addr);
                 /* delay slot */
                 tcg_out_opc_imm(s, OPC_LD, TCG_TMP0, base, 0);
                 tcg_out_mov(s, TCG_TYPE_I64, lo, TCG_TMP3);
@@ -1487,11 +1482,11 @@ static void tcg_out_qemu_ld_direct(TCGContext *s, TCGReg lo, TCGReg hi,
             tcg_out_opc_sa(s, OPC_ROTR, MIPS_BE ? lo : hi, TCG_TMP0, 16);
             tcg_out_opc_sa(s, OPC_ROTR, MIPS_BE ? hi : lo, TCG_TMP1, 16);
         } else {
-            tcg_out_bswap_subr(s, bswap32_addr);
+            tcg_out_bswap_subr(s, s->bswap32_addr);
             /* delay slot */
             tcg_out_opc_imm(s, OPC_LW, TCG_TMP0, base, 0);
             tcg_out_opc_imm(s, OPC_LW, TCG_TMP0, base, 4);
-            tcg_out_bswap_subr(s, bswap32_addr);
+            tcg_out_bswap_subr(s, s->bswap32_addr);
             /* delay slot */
             tcg_out_mov(s, TCG_TYPE_I32, MIPS_BE ? lo : hi, TCG_TMP3);
             tcg_out_mov(s, TCG_TYPE_I32, MIPS_BE ? hi : lo, TCG_TMP3);
@@ -1732,9 +1727,9 @@ static inline void tcg_out_op(TCGContext *s, TCGOpcode opc,
                 tcg_out_movi(s, TCG_TYPE_PTR, TCG_REG_V0, a0 & ~0xffff);
                 b0 = TCG_REG_V0;
             }
-            if (!tcg_out_opc_jmp(s, OPC_J, tb_ret_addr)) {
+            if (!tcg_out_opc_jmp(s, OPC_J, s->tb_ret_addr)) {
                 tcg_out_movi(s, TCG_TYPE_PTR, TCG_TMP0,
-                             (uintptr_t)tb_ret_addr);
+                             (uintptr_t)s->tb_ret_addr);
                 tcg_out_opc_reg(s, OPC_JR, 0, TCG_TMP0, 0);
             }
             tcg_out_opc_imm(s, OPC_ORI, TCG_REG_V0, b0, a0 & 0xffff);
@@ -2496,7 +2491,7 @@ static void tcg_target_qemu_prologue(TCGContext *s)
     tcg_out_mov(s, TCG_TYPE_REG, TCG_REG_V0, TCG_REG_ZERO);
 
     /* TB epilogue */
-    tb_ret_addr = s->code_ptr;
+    s->tb_ret_addr = s->code_ptr;
     for (i = 0; i < ARRAY_SIZE(tcg_target_callee_save_regs); i++) {
         tcg_out_ld(s, TCG_TYPE_REG, tcg_target_callee_save_regs[i],
                    TCG_REG_SP, SAVE_OFS + i * REG_SIZE);
@@ -2516,7 +2511,7 @@ static void tcg_target_qemu_prologue(TCGContext *s)
     /*
      * bswap32 -- 32-bit swap (signed result for mips64).  a0 = abcd.
      */
-    bswap32_addr = align_code_ptr(s);
+    s->bswap32_addr = align_code_ptr(s);
     /* t3 = (ssss)d000 */
     tcg_out_opc_sa(s, OPC_SLL, TCG_TMP3, TCG_TMP0, 24);
     /* t1 = 000a */
@@ -2544,7 +2539,7 @@ static void tcg_target_qemu_prologue(TCGContext *s)
     /*
      * bswap32u -- unsigned 32-bit swap.  a0 = ....abcd.
      */
-    bswap32u_addr = align_code_ptr(s);
+    s->bswap32u_addr = align_code_ptr(s);
     /* t1 = (0000)000d */
     tcg_out_opc_imm(s, OPC_ANDI, TCG_TMP1, TCG_TMP0, 0xff);
     /* t3 = 000a */
@@ -2570,7 +2565,7 @@ static void tcg_target_qemu_prologue(TCGContext *s)
     /*
      * bswap64 -- 64-bit swap.  a0 = abcdefgh
      */
-    bswap64_addr = align_code_ptr(s);
+    s->bswap64_addr = align_code_ptr(s);
     /* t3 = h0000000 */
     tcg_out_dsll(s, TCG_TMP3, TCG_TMP0, 56);
     /* t1 = 0000000a */

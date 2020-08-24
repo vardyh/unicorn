@@ -679,6 +679,9 @@ struct TCGContext {
 
     /* qemu/tcg/i386/tcg-target.c */
     void *tb_ret_addr;
+    void *bswap32_addr;
+    void *bswap32u_addr;
+    void *bswap64_addr;
     int guest_base_flags;
     /* If bit_MOVBE is defined in cpuid.h (added in GCC version 4.6), we are
        going to attempt to determine at runtime whether movbe is available.  */
